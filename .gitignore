@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.egg
+.pytest_cache/
+
+# Database (local, not committed)
+data/neetpg.db
+data/neetpg.db-shm
+data/neetpg.db-wal
+*.db
+
+# PDFs (large files, do not commit)
+data/pdfs/*.pdf
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.env.local
+
+# Misc
+.DS_Store
+.env
+*.log

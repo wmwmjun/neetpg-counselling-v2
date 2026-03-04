@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar for the modal table */
+.modal-table-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.modal-table-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.modal-table-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 3px;
+}

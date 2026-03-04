@@ -1,0 +1,105 @@
+"""
+GET /allotments
+Returns raw allotment records with full server-side filtering and pagination.
+"""
+from __future__ import annotations
+import math
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
+
+from ..database import get_db
+from ..models import Allotment
+from ..schemas import AllotmentRow, AllotmentListResponse
+
+router = APIRouter()
+
+
+@router.get("", response_model=AllotmentListResponse)
+def get_allotments(
+    # Dataset dimensions
+    year: Optional[int] = Query(None),
+    counselling_type: Optional[str] = Query(None),
+    counselling_state: Optional[str] = Query(None),
+    round: Optional[int] = Query(None),
+    # Filters
+    quota_norm: Optional[str] = Query(None),
+    allotted_category_norm: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    course_norm: Optional[str] = Query(None),
+    institute_name: Optional[str] = Query(None),
+    rank_min: Optional[int] = Query(None),
+    rank_max: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    # Sort
+    sort_by: str = Query("rank", enum=["rank", "institute_name", "course_norm", "sno"]),
+    sort_order: str = Query("asc", enum=["asc", "desc"]),
+    # Pagination
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    q = db.query(Allotment)
+
+    if year is not None:
+        q = q.filter(Allotment.year == year)
+    if counselling_type:
+        q = q.filter(Allotment.counselling_type == counselling_type)
+    if counselling_state is not None:
+        if counselling_state == "":
+            q = q.filter(Allotment.counselling_state.is_(None))
+        else:
+            q = q.filter(Allotment.counselling_state == counselling_state)
+    if round is not None:
+        q = q.filter(Allotment.round == round)
+    if quota_norm:
+        q = q.filter(Allotment.quota_norm == quota_norm)
+    if allotted_category_norm:
+        q = q.filter(Allotment.allotted_category_norm == allotted_category_norm)
+    if state:
+        q = q.filter(Allotment.state == state)
+    if course_norm:
+        q = q.filter(Allotment.course_norm.ilike(f"%{course_norm}%"))
+    if institute_name:
+        q = q.filter(Allotment.institute_name.ilike(f"%{institute_name}%"))
+    if rank_min is not None:
+        q = q.filter(Allotment.rank >= rank_min)
+    if rank_max is not None:
+        q = q.filter(Allotment.rank <= rank_max)
+    if search:
+        term = f"%{search}%"
+        q = q.filter(
+            or_(
+                Allotment.institute_name.ilike(term),
+                Allotment.course_norm.ilike(term),
+                Allotment.course_raw.ilike(term),
+                Allotment.institute_raw.ilike(term),
+            )
+        )
+
+    # Sort
+    sort_col_map = {
+        "rank": Allotment.rank,
+        "institute_name": Allotment.institute_name,
+        "course_norm": Allotment.course_norm,
+        "sno": Allotment.sno,
+    }
+    col = sort_col_map.get(sort_by, Allotment.rank)
+    if sort_order == "desc":
+        q = q.order_by(col.desc().nullslast())
+    else:
+        q = q.order_by(col.asc().nullsfirst())
+
+    total = q.count()
+    pages = math.ceil(total / page_size) if page_size else 1
+    records = q.offset((page - 1) * page_size).limit(page_size).all()
+
+    return AllotmentListResponse(
+        data=[AllotmentRow.model_validate(r) for r in records],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages,
+    )
