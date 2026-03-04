@@ -1,9 +1,12 @@
 "use client";
-
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import type { DrillDownResponse } from "@/lib/api";
 
-interface DrillDownModalProps {
+const CAT_CLASS: Record<string, string> = {
+  GN: "badge-GN", EW: "badge-EW", BC: "badge-BC", SC: "badge-SC", ST: "badge-ST",
+};
+
+interface Props {
   groupId: string | null;
   data: DrillDownResponse | null;
   loading: boolean;
@@ -11,25 +14,13 @@ interface DrillDownModalProps {
   onClose: () => void;
 }
 
-export default function DrillDownModal({
-  groupId,
-  data,
-  loading,
-  error,
-  onClose,
-}: DrillDownModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  // Close on Escape
+export default function DrillDownModal({ groupId, data, loading, error, onClose }: Props) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
   }, [onClose]);
 
-  // Trap focus within modal
   useEffect(() => {
     if (groupId) document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
@@ -37,109 +28,87 @@ export default function DrillDownModal({
 
   if (!groupId) return null;
 
-  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === overlayRef.current) onClose();
-  };
+  const rows = data?.data ?? [];
+  const title = rows[0]
+    ? `${rows[0].institute_name ?? ""} · ${rows[0].course_norm ?? ""}`
+    : "Allotments";
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Allotments drill-down"
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: "#fff", borderRadius: 6, width: "100%", maxWidth: 860,
+        maxHeight: "88vh", display: "flex", flexDirection: "column",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.22)"
+      }}>
+        {/* Header */}
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #e0e0e0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
               Allotments up to Closing Rank
-            </h2>
+            </div>
+            <div style={{ fontSize: 12, color: "#666" }}>
+              {title}
+            </div>
             {data && (
-              <p className="text-sm text-slate-500 mt-0.5">
-                {data.allotment_count} allotment
-                {data.allotment_count !== 1 ? "s" : ""} · Closing rank:{" "}
-                <span className="font-semibold text-brand-600">
-                  {data.closing_rank?.toLocaleString() ?? "—"}
-                </span>{" "}
-                · R{data.data[0]?.round ?? 1} – {new Date().getFullYear()}
-              </p>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
+                {data.allotment_count} record{data.allotment_count !== 1 ? "s" : ""} &nbsp;·&nbsp;
+                Closing Rank: <span style={{ color: "#2871b5", fontWeight: 700 }}>{data.closing_rank?.toLocaleString() ?? "—"}</span>
+                &nbsp;·&nbsp; R{rows[0]?.round ?? 1} – 2025
+              </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
-            aria-label="Close modal"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888", lineHeight: 1, marginLeft: 12 }}>×</button>
         </div>
 
-        {/* Modal body */}
-        <div className="flex-1 overflow-auto modal-table-scroll">
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
           {loading && (
-            <div className="flex items-center justify-center py-16">
-              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 48 }}>
+              <div style={{ width: 28, height: 28, border: "3px solid #2871b5", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
             </div>
           )}
-
           {error && !loading && (
-            <div className="flex items-center justify-center py-16 text-red-500">
-              {error}
-            </div>
+            <div style={{ padding: 32, textAlign: "center", color: "#c00", fontSize: 13 }}>{error}</div>
           )}
-
-          {!loading && !error && data && data.data.length === 0 && (
-            <div className="flex items-center justify-center py-16 text-slate-400">
-              No allotments found.
-            </div>
+          {!loading && !error && rows.length === 0 && (
+            <div style={{ padding: 40, textAlign: "center", color: "#888" }}>No allotments found.</div>
           )}
-
-          {!loading && !error && data && data.data.length > 0 && (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+          {!loading && !error && rows.length > 0 && (
+            <table className="cr-table" style={{ fontSize: 12 }}>
+              <thead>
                 <tr>
-                  <th className="th-cell text-center w-16">Rank</th>
-                  <th className="th-cell w-8">Rnd</th>
-                  <th className="th-cell">State</th>
-                  <th className="th-cell">Institute</th>
-                  <th className="th-cell">Course</th>
-                  <th className="th-cell w-16">Quota</th>
-                  <th className="th-cell">Allotted Cat.</th>
-                  <th className="th-cell">Candidate Cat.</th>
-                  <th className="th-cell">Remarks</th>
+                  <th>Round</th>
+                  <th>State</th>
+                  <th>Institute</th>
+                  <th>Course</th>
+                  <th>Quota</th>
+                  <th>Allotted Cat.</th>
+                  <th>Candidate Cat.</th>
+                  <th style={{ textAlign: "right", color: "#2871b5" }}>AI Rank</th>
                 </tr>
               </thead>
               <tbody>
-                {data.data.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors
-                      ${row.rank === data.closing_rank ? "bg-amber-50 font-medium" : ""}
-                    `}
-                  >
-                    <td className="td-cell text-center font-mono font-semibold text-brand-700">
-                      {row.rank?.toLocaleString() ?? "—"}
+                {rows.map((r, i) => (
+                  <tr key={i} style={r.rank === data?.closing_rank ? { background: "#fffbea" } : {}}>
+                    <td style={{ textAlign: "center", color: "#666" }}>R{r.round}</td>
+                    <td style={{ color: "#555" }}>{r.state ?? "—"}</td>
+                    <td style={{ fontWeight: 500 }}>{r.institute_name ?? "—"}</td>
+                    <td>{r.course_norm ?? "—"}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <span className="badge-quota">{r.quota_norm ?? "—"}</span>
                     </td>
-                    <td className="td-cell text-center">{row.round}</td>
-                    <td className="td-cell text-slate-500">{row.state ?? "—"}</td>
-                    <td className="td-cell font-medium">{row.institute_name ?? "—"}</td>
-                    <td className="td-cell">{row.course_norm ?? "—"}</td>
-                    <td className="td-cell text-center">
-                      <QuotaBadge quota={row.quota_norm} />
+                    <td style={{ textAlign: "center" }}>
+                      <span className={`badge ${CAT_CLASS[r.allotted_category_norm ?? ""] ?? "badge-default"}`}>
+                        {r.allotted_category_norm ?? "—"}
+                      </span>
                     </td>
-                    <td className="td-cell">
-                      <CategoryBadge category={row.allotted_category_norm} />
+                    <td style={{ textAlign: "center", color: "#888", fontSize: 11 }}>
+                      {r.candidate_category_raw ?? "—"}
                     </td>
-                    <td className="td-cell text-slate-500 text-xs">
-                      {row.candidate_category_raw ?? "—"}
-                    </td>
-                    <td className="td-cell text-slate-400 text-xs max-w-[160px] truncate">
-                      {row.remarks ?? ""}
+                    <td style={{ textAlign: "right", fontWeight: r.rank === data?.closing_rank ? 700 : 400, color: r.rank === data?.closing_rank ? "#e07d38" : "#2871b5", fontFamily: "monospace" }}>
+                      {r.rank?.toLocaleString() ?? "—"}
+                      {r.rank === data?.closing_rank && <span style={{ fontSize: 10, marginLeft: 4, color: "#e07d38" }}>CR</span>}
                     </td>
                   </tr>
                 ))}
@@ -149,64 +118,11 @@ export default function DrillDownModal({
         </div>
 
         {/* Footer */}
-        {data && (
-          <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
-            <span>
-              Sorted by rank ascending · Highlighted row = closing rank
-            </span>
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 text-sm rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        )}
+        <div style={{ padding: "10px 20px", borderTop: "1px solid #e0e0e0", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#aaa" }}>
+          <span>Sorted by AI Rank ascending · Highlighted row = Closing Rank</span>
+          <button className="btn-ghost" style={{ fontSize: 12 }} onClick={onClose}>Close</button>
+        </div>
       </div>
-
-      <style jsx>{`
-        .th-cell {
-          padding: 0.5rem 0.75rem;
-          text-align: left;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          white-space: nowrap;
-        }
-        .td-cell {
-          padding: 0.5rem 0.75rem;
-          vertical-align: top;
-        }
-      `}</style>
     </div>
-  );
-}
-
-function QuotaBadge({ quota }: { quota: string | null }) {
-  if (!quota) return <span className="text-slate-400">—</span>;
-  return (
-    <span className="inline-block px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-mono font-semibold">
-      {quota}
-    </span>
-  );
-}
-
-function CategoryBadge({ category }: { category: string | null }) {
-  if (!category) return <span className="text-slate-400">—</span>;
-  const colorMap: Record<string, string> = {
-    GN: "bg-green-100 text-green-700",
-    EW: "bg-yellow-100 text-yellow-700",
-    BC: "bg-orange-100 text-orange-700",
-    SC: "bg-purple-100 text-purple-700",
-    ST: "bg-red-100 text-red-700",
-  };
-  const base = category.split("-")[0];
-  const color = colorMap[base] ?? "bg-slate-100 text-slate-600";
-  return (
-    <span className={`inline-block px-1.5 py-0.5 text-xs rounded font-medium ${color}`}>
-      {category}
-    </span>
   );
 }
