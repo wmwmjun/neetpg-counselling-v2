@@ -1,13 +1,4 @@
-/**
- * Typed API client for the NEET-PG Analytics backend.
- * All filtering is delegated to server-side SQL.
- */
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface MetadataResponse {
   years: number[];
@@ -63,10 +54,6 @@ export interface DrillDownResponse {
   data: DrillDownRow[];
 }
 
-// ---------------------------------------------------------------------------
-// Filter params
-// ---------------------------------------------------------------------------
-
 export interface ClosingRankFilters {
   year?: number;
   counselling_type?: string;
@@ -85,50 +72,29 @@ export interface ClosingRankFilters {
   page_size?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function buildQuery(params: Record<string, unknown>): string {
-  const qs = new URLSearchParams();
+function qs(params: Record<string, unknown>): string {
+  const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") {
-      qs.set(k, String(v));
-    }
+    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   }
-  const s = qs.toString();
+  const s = q.toString();
   return s ? `?${s}` : "";
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
+async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`);
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API error ${res.status}: ${body}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(`API ${res.status}: ${body || res.statusText}`);
   }
   return res.json() as Promise<T>;
 }
 
-// ---------------------------------------------------------------------------
-// API calls
-// ---------------------------------------------------------------------------
+export const fetchMetadata = (p: Record<string, unknown> = {}): Promise<MetadataResponse> =>
+  get(`/metadata${qs(p)}`);
 
-export async function fetchMetadata(
-  params: Partial<{ year: number; counselling_type: string; counselling_state: string; round: number }>
-): Promise<MetadataResponse> {
-  return apiFetch<MetadataResponse>(`/metadata${buildQuery(params)}`);
-}
+export const fetchClosingRanks = (f: ClosingRankFilters): Promise<PaginatedResponse<ClosingRankRow>> =>
+  get(`/closing-ranks${qs(f as Record<string, unknown>)}`);
 
-export async function fetchClosingRanks(
-  filters: ClosingRankFilters
-): Promise<PaginatedResponse<ClosingRankRow>> {
-  return apiFetch<PaginatedResponse<ClosingRankRow>>(
-    `/closing-ranks${buildQuery(filters as Record<string, unknown>)}`
-  );
-}
-
-export async function fetchDrillDown(groupId: string): Promise<DrillDownResponse> {
-  return apiFetch<DrillDownResponse>(
-    `/closing-ranks/${encodeURIComponent(groupId)}/allotments`
-  );
-}
+export const fetchDrillDown = (groupId: string): Promise<DrillDownResponse> =>
+  get(`/closing-ranks/${encodeURIComponent(groupId)}/allotments`);
