@@ -77,6 +77,16 @@ class Allotment(Base):
     )
 
 
+class InstituteMapping(Base):
+    """Mapping from allotment institute names to institute_code (built by build_institutes_v2.py)."""
+    __tablename__ = "institute_mapping"
+
+    db_institute_name = Column(Text, primary_key=True)
+    institute_code = Column(Integer, nullable=True)
+    match_confidence = Column(String(64), nullable=True)
+    match_score = Column(Integer, nullable=True)
+
+
 class Institute(Base):
     """Institute data built from Seat Matrix + Profile PDF matching.
     Built by scripts/build_institutes_v2.py"""
