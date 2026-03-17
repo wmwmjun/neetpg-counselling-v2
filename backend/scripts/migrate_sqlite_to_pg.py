@@ -23,6 +23,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, text, inspect
+from sqlalchemy.pool import NullPool
 
 # --- Source: local SQLite ---
 SQLITE_PATH = os.getenv("SQLITE_PATH", "data/neetpg.db")
@@ -44,8 +45,7 @@ if not PG_URL or "postgresql" not in PG_URL:
 
 pg_engine = create_engine(
     PG_URL,
-    pool_pre_ping=True,
-    pool_recycle=60,
+    poolclass=NullPool,  # No connection pooling - fresh connection each time
     connect_args={
         "connect_timeout": 30,
         "keepalives": 1,
@@ -119,12 +119,6 @@ def migrate_table(table_name: str, resume: bool = False):
 
     # Build INSERT with ON CONFLICT DO NOTHING for resume safety
     pk = TABLE_PK.get(table_name, "id")
-    placeholders = ", ".join(f":{c}" for c in col_names)
-    insert_sql = (
-        f"INSERT INTO {table_name} ({', '.join(col_names)}) "
-        f"VALUES ({placeholders}) "
-        f"ON CONFLICT ({pk}) DO NOTHING"
-    )
 
     # Skip already-inserted rows when resuming
     start_idx = existing_count if resume else 0
@@ -135,10 +129,27 @@ def migrate_table(table_name: str, resume: bool = False):
         batch = rows[i : i + BATCH_SIZE]
         params = [dict(zip(col_names, row)) for row in batch]
 
+        # Build single INSERT ... VALUES (...), (...) statement per batch
+        # This is much faster than executemany
+        value_rows = []
+        bind_params = {}
+        for row_idx, row_dict in enumerate(params):
+            row_placeholders = []
+            for col in col_names:
+                param_name = f"p{row_idx}_{col}"
+                row_placeholders.append(f":{param_name}")
+                bind_params[param_name] = row_dict[col]
+            value_rows.append(f"({', '.join(row_placeholders)})")
+
+        insert_sql = (
+            f"INSERT INTO {table_name} ({', '.join(col_names)}) "
+            f"VALUES {', '.join(value_rows)} "
+            f"ON CONFLICT ({pk}) DO NOTHING"
+        )
+
         try:
-            # New connection per batch to avoid timeout
             with pg_engine.connect() as dst:
-                dst.execute(text(insert_sql), params)
+                dst.execute(text(insert_sql), bind_params)
                 dst.commit()
             inserted += len(batch)
             retries = 0
