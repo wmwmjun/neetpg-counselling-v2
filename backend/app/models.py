@@ -18,7 +18,7 @@ class Allotment(Base):
 
     # Dataset dimensions (extensibility axes)
     year = Column(Integer, nullable=False)
-    counselling_type = Column(String(16), nullable=False)   # AIQ | STATE
+    counselling_type = Column(String(64), nullable=False)   # AIQ | STATE
     counselling_state = Column(String(64), nullable=True)   # null for AIQ
     round = Column(Integer, nullable=False)
 
@@ -28,7 +28,7 @@ class Allotment(Base):
 
     # Quota
     quota_raw = Column(String(64), nullable=True)
-    quota_norm = Column(String(16), nullable=True)
+    quota_norm = Column(String(64), nullable=True)
 
     # Institute
     institute_raw = Column(Text, nullable=True)
@@ -43,7 +43,7 @@ class Allotment(Base):
 
     # Categories
     allotted_category_raw = Column(String(64), nullable=True)
-    allotted_category_norm = Column(String(16), nullable=True)
+    allotted_category_norm = Column(String(64), nullable=True)
     candidate_category_raw = Column(String(64), nullable=True)   # modal only
 
     # Extras
@@ -57,7 +57,7 @@ class Allotment(Base):
     r1_status = Column(String(128), nullable=True)
     # Derived seat outcome after applying Round-1 × Round-2 business logic:
     # RETAINED | UPGRADED | LOST | FRESH | NOT_ALLOTTED | UNKNOWN
-    seat_outcome = Column(String(16), nullable=True)
+    seat_outcome = Column(String(64), nullable=True)
     # Option number from Round-2 PDF col 11 (stored but not exposed in UI)
     option_code = Column(String(64), nullable=True)
 
@@ -96,14 +96,14 @@ class Institute(Base):
     stipend_yr1    = Column(String(64), nullable=True)
     stipend_yr2    = Column(String(64), nullable=True)
     stipend_yr3    = Column(String(64), nullable=True)
-    hostel_male    = Column(String(16), nullable=True)
-    hostel_female  = Column(String(16), nullable=True)
+    hostel_male    = Column(String(64), nullable=True)
+    hostel_female  = Column(String(64), nullable=True)
     bond_forfeit   = Column(String(128), nullable=True)
-    bond_years     = Column(String(16), nullable=True)
+    bond_years     = Column(String(64), nullable=True)
     beds           = Column(Integer, nullable=True)
-    pwbd_friendly  = Column(String(16), nullable=True)
+    pwbd_friendly  = Column(String(64), nullable=True)
     website        = Column(String(256), nullable=True)
-    match_status   = Column(String(16), nullable=True)
+    match_status   = Column(String(64), nullable=True)
 
 
 class RefCourse(Base):
@@ -123,7 +123,7 @@ class IngestionError(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     year = Column(Integer, nullable=True)
-    counselling_type = Column(String(16), nullable=True)
+    counselling_type = Column(String(64), nullable=True)
     counselling_state = Column(String(64), nullable=True)
     round = Column(Integer, nullable=True)
     page_num = Column(Integer, nullable=True)
@@ -141,5 +141,5 @@ class IngestionProgress(Base):
     last_page_completed = Column(Integer, default=0)
     total_rows_inserted = Column(Integer, default=0)
     total_rows_skipped = Column(Integer, default=0)
-    status = Column(String(16), default="in_progress")   # in_progress | done | failed
+    status = Column(String(64), default="in_progress")   # in_progress | done | failed
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
