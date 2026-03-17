@@ -5,17 +5,24 @@ Migrate all data from local SQLite to remote PostgreSQL (Supabase).
 Usage (from backend/ directory):
     DATABASE_URL='postgresql+psycopg2://...' python3 -m scripts.migrate_sqlite_to_pg
 
+    # Resume after interruption (skips already-migrated rows):
+    DATABASE_URL='postgresql+psycopg2://...' python3 -m scripts.migrate_sqlite_to_pg --resume
+
+    # Force fresh migration (clears target tables first):
+    DATABASE_URL='postgresql+psycopg2://...' python3 -m scripts.migrate_sqlite_to_pg --clear
+
 Requires:
   - Local SQLite database at data/neetpg.db (default) or set SQLITE_PATH env var
   - DATABASE_URL env var pointing to PostgreSQL (Supabase)
 """
 import os
 import sys
+import time
+import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, text, inspect
-from sqlalchemy.orm import sessionmaker
 
 # --- Source: local SQLite ---
 SQLITE_PATH = os.getenv("SQLITE_PATH", "data/neetpg.db")
@@ -35,7 +42,18 @@ if not PG_URL or "postgresql" not in PG_URL:
     print("ERROR: DATABASE_URL must be set to a PostgreSQL connection string.")
     sys.exit(1)
 
-pg_engine = create_engine(PG_URL)
+pg_engine = create_engine(
+    PG_URL,
+    pool_pre_ping=True,
+    pool_recycle=60,
+    connect_args={
+        "connect_timeout": 30,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    },
+)
 
 # Tables to migrate (in order to respect foreign key deps)
 TABLES = [
@@ -47,12 +65,21 @@ TABLES = [
     "ingestion_errors",
 ]
 
-BATCH_SIZE = 500
+# Primary key column for each table (for resume support)
+TABLE_PK = {
+    "institutes": "institute_code",
+    "institute_mapping": "db_institute_name",
+    "allotments": "id",
+    "ref_courses": "id",
+    "ingestion_progress": "id",
+    "ingestion_errors": "id",
+}
+
+BATCH_SIZE = 100
 
 
-def migrate_table(table_name: str):
+def migrate_table(table_name: str, resume: bool = False):
     """Copy all rows from SQLite table to PostgreSQL."""
-    # Check if table exists in SQLite
     sqlite_inspector = inspect(sqlite_engine)
     if table_name not in sqlite_inspector.get_table_names():
         print(f"  SKIP {table_name}: not found in SQLite")
@@ -67,30 +94,84 @@ def migrate_table(table_name: str):
         print(f"  SKIP {table_name}: 0 rows in SQLite")
         return
 
-    print(f"  {table_name}: {len(rows)} rows to migrate...")
+    total = len(rows)
 
-    with pg_engine.connect() as dst:
-        # Clear existing data
-        dst.execute(text(f"DELETE FROM {table_name}"))
+    # Check how many rows already exist in target
+    existing_count = 0
+    if resume:
+        with pg_engine.connect() as dst:
+            result = dst.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+            existing_count = result.scalar()
+        if existing_count >= total:
+            print(f"  SKIP {table_name}: already complete ({existing_count}/{total})")
+            return
+        if existing_count > 0:
+            print(f"  {table_name}: resuming from {existing_count}/{total}...")
 
-        # Insert in batches
-        placeholders = ", ".join(f":{c}" for c in col_names)
-        insert_sql = f"INSERT INTO {table_name} ({', '.join(col_names)}) VALUES ({placeholders})"
+    if not resume or existing_count == 0:
+        # Fresh start: clear existing data
+        with pg_engine.connect() as dst:
+            dst.execute(text(f"DELETE FROM {table_name}"))
+            dst.commit()
+        existing_count = 0
 
-        for i in range(0, len(rows), BATCH_SIZE):
-            batch = rows[i : i + BATCH_SIZE]
-            params = [dict(zip(col_names, row)) for row in batch]
-            dst.execute(text(insert_sql), params)
-            print(f"    {min(i + BATCH_SIZE, len(rows))}/{len(rows)}")
+    print(f"  {table_name}: {total - existing_count} rows to insert (total {total})...")
 
-        dst.commit()
+    # Build INSERT with ON CONFLICT DO NOTHING for resume safety
+    pk = TABLE_PK.get(table_name, "id")
+    placeholders = ", ".join(f":{c}" for c in col_names)
+    insert_sql = (
+        f"INSERT INTO {table_name} ({', '.join(col_names)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT ({pk}) DO NOTHING"
+    )
 
-    print(f"  {table_name}: DONE ({len(rows)} rows)")
+    # Skip already-inserted rows when resuming
+    start_idx = existing_count if resume else 0
+    inserted = 0
+    retries = 0
+
+    for i in range(start_idx, total, BATCH_SIZE):
+        batch = rows[i : i + BATCH_SIZE]
+        params = [dict(zip(col_names, row)) for row in batch]
+
+        try:
+            # New connection per batch to avoid timeout
+            with pg_engine.connect() as dst:
+                dst.execute(text(insert_sql), params)
+                dst.commit()
+            inserted += len(batch)
+            retries = 0
+            print(f"    {min(i + BATCH_SIZE, total)}/{total}")
+        except Exception as e:
+            retries += 1
+            if retries > 4:
+                print(f"  FAILED after 4 retries at row {i}: {e}")
+                raise
+            wait = 2 ** retries
+            print(f"    Error at row {i}, retrying in {wait}s... ({e})")
+            time.sleep(wait)
+            # Retry same batch
+            continue
+
+    print(f"  {table_name}: DONE ({inserted} rows inserted)")
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--resume", action="store_true",
+                        help="Resume interrupted migration (skip existing rows)")
+    parser.add_argument("--clear", action="store_true",
+                        help="Clear all target tables before migrating")
+    args = parser.parse_args()
+
+    if args.resume and args.clear:
+        print("ERROR: --resume and --clear are mutually exclusive")
+        sys.exit(1)
+
     print(f"Source: SQLite @ {SQLITE_PATH}")
     print(f"Target: PostgreSQL @ {PG_URL.split('@')[1] if '@' in PG_URL else '***'}")
+    print(f"Mode: {'resume' if args.resume else 'clear' if args.clear else 'fresh'}")
     print()
 
     # Ensure target tables exist
@@ -99,8 +180,29 @@ def main():
     Base.metadata.create_all(bind=pg_engine)
     print("Target tables verified.\n")
 
+    if args.clear:
+        print("Clearing all target tables...")
+        with pg_engine.connect() as dst:
+            for table in reversed(TABLES):
+                dst.execute(text(f"DELETE FROM {table}"))
+            dst.commit()
+        print()
+
     for table in TABLES:
-        migrate_table(table)
+        migrate_table(table, resume=args.resume)
+
+    # Reset sequences for auto-increment columns
+    print("\nResetting sequences...")
+    with pg_engine.connect() as dst:
+        for table in ["allotments", "ref_courses", "ingestion_progress", "ingestion_errors"]:
+            try:
+                dst.execute(text(
+                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+                    f"COALESCE((SELECT MAX(id) FROM {table}), 1))"
+                ))
+            except Exception:
+                pass
+        dst.commit()
 
     print("\nMigration complete!")
 
