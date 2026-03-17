@@ -17,12 +17,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Build CORS origins from environment variable + defaults
+_default_origins = [
+    "https://neetpg-counselling-v2.vercel.app",
+    "http://localhost:3000",
+]
+_extra = os.getenv("CORS_ORIGINS", "")
+_origins = _default_origins + [o.strip() for o in _extra.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://neetpg-counselling-v2.vercel.app",
-        "http://localhost:3000",
-    ],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
