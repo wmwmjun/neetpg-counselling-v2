@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import SessionLocal, engine, Base
 from app import models  # noqa
 from app.models import Allotment, RefCourse as RC, IngestionProgress
-from ingestion.normalizers import normalize_course, split_course_degree_specialty
+from ingestion.normalizers import normalize_course, split_course_degree_specialty, classify_course_type
 
 random.seed(42)
 
@@ -699,8 +699,12 @@ def main():
             course_norm = normalize_course(course_raw)
             if course_norm and course_norm not in existing_norms:
                 deg, spec = split_course_degree_specialty(course_norm)
-                db.add(RC(course_norm=course_norm, degree=deg, specialty=spec))
+                ctype = classify_course_type(course_norm)
+                db.add(RC(course_norm=course_norm, degree=deg, specialty=spec, course_type=ctype))
                 existing_norms.add(course_norm)
+        # Backfill course_type for any existing ref_courses that lack it
+        for rc in db.query(RC).filter(RC.course_type.is_(None)).all():
+            rc.course_type = classify_course_type(rc.course_norm)
         db.commit()
 
         total_rows = db.query(Allotment).count()

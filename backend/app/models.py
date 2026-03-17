@@ -33,6 +33,8 @@ class Allotment(Base):
     # Institute
     institute_raw = Column(Text, nullable=True)
     institute_name = Column(String(256), nullable=True)
+    institute_city = Column(String(128), nullable=True)
+    institute_pincode = Column(String(10), nullable=True)
     state = Column(String(64), nullable=True)
 
     # Course
@@ -48,6 +50,16 @@ class Allotment(Base):
     remarks = Column(Text, nullable=True)
     source_page = Column(Integer, nullable=True)
     source_row_fingerprint = Column(String(64), nullable=True)
+
+    # Round 2 specific fields
+    # R1 outcome string parsed from the left half of the Round-2 PDF
+    # (e.g. "Reported", "Not Reported", "Seat Surrendered")
+    r1_status = Column(String(128), nullable=True)
+    # Derived seat outcome after applying Round-1 × Round-2 business logic:
+    # RETAINED | UPGRADED | LOST | FRESH | NOT_ALLOTTED | UNKNOWN
+    seat_outcome = Column(String(16), nullable=True)
+    # Option number from Round-2 PDF col 11 (stored but not exposed in UI)
+    option_code = Column(String(64), nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -65,6 +77,35 @@ class Allotment(Base):
     )
 
 
+class Institute(Base):
+    """Institute data built from Seat Matrix + Profile PDF matching.
+    Built by scripts/build_institutes_v2.py"""
+    __tablename__ = "institutes"
+
+    institute_code = Column(Integer, primary_key=True)
+    institute_name = Column(String(256), nullable=False)
+    display_name   = Column(String(320), nullable=False)
+    address        = Column(Text, nullable=True)
+    state          = Column(String(64), nullable=True)
+    pincode        = Column(String(10), nullable=True)
+    university     = Column(Text, nullable=True)
+    fee_yr1        = Column(Integer, nullable=True)
+    fee_yr2        = Column(Integer, nullable=True)
+    fee_yr3        = Column(Integer, nullable=True)
+    annual_fee     = Column(String(64), nullable=True)
+    stipend_yr1    = Column(String(64), nullable=True)
+    stipend_yr2    = Column(String(64), nullable=True)
+    stipend_yr3    = Column(String(64), nullable=True)
+    hostel_male    = Column(String(16), nullable=True)
+    hostel_female  = Column(String(16), nullable=True)
+    bond_forfeit   = Column(String(128), nullable=True)
+    bond_years     = Column(String(16), nullable=True)
+    beds           = Column(Integer, nullable=True)
+    pwbd_friendly  = Column(String(16), nullable=True)
+    website        = Column(String(256), nullable=True)
+    match_status   = Column(String(16), nullable=True)
+
+
 class RefCourse(Base):
     """Auto-populated from distinct course_norm after ingestion."""
     __tablename__ = "ref_courses"
@@ -73,6 +114,7 @@ class RefCourse(Base):
     course_norm = Column(String(256), unique=True, nullable=False)
     degree = Column(String(32), nullable=True)
     specialty = Column(String(256), nullable=True)
+    course_type = Column(String(32), nullable=True)   # Clinical | Non-Clinical | Para-Clinical | Pre-Clinical
 
 
 class IngestionError(Base):

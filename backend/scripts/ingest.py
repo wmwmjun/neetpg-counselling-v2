@@ -22,6 +22,11 @@ Usage examples:
       --pdf data/pdfs/KA_2025_R1.pdf \
       --year 2025 --type STATE --state Karnataka --round 1
 
+  # Round 2 ingestion (12-column PDF with combined R1+R2 data)
+  python -m scripts.ingest \
+      --pdf data/pdfs/AIQ_2025_R2.pdf \
+      --year 2025 --type AIQ --round 2
+
   # Force re-ingest (ignore existing progress)
   python -m scripts.ingest ... --force
 """
@@ -40,7 +45,7 @@ logging.basicConfig(
 from app.database import SessionLocal, engine, Base
 from app import models  # noqa
 from ingestion.config import DatasetConfig
-from ingestion.pipeline import run_ingestion
+from ingestion.pipeline import run_ingestion, run_round2_ingestion, run_round3_ingestion
 
 
 def parse_args():
@@ -98,7 +103,13 @@ def main():
                 db.commit()
                 print(f"Cleared existing progress for {cfg.dataset_key()}")
 
-        summary = run_ingestion(cfg, db)
+        if args.round == 2:
+            summary = run_round2_ingestion(cfg, db)
+        elif args.round == 3:
+            summary = run_round3_ingestion(cfg, db)
+        else:
+            # Round 1 and Round 4 (Stray Vacancy) share the same 8-column format
+            summary = run_ingestion(cfg, db)
         print("\nIngestion summary:")
         for k, v in summary.items():
             print(f"  {k}: {v}")
