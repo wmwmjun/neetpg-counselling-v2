@@ -9,21 +9,46 @@ export interface MetadataResponse {
   categories: string[];
   states: string[];
   courses: string[];
+  course_types: string[];
 }
 
 export interface ClosingRankRow {
-  group_id: string;
+  r1_group_id: string | null;
+  r2_group_id: string | null;
   year: number;
   counselling_type: string;
   counselling_state: string | null;
-  round: number;
   institute_name: string | null;
+  institute_city: string | null;
+  institute_address: string | null;
+  institute_address_verified: string | null;
+  institute_pincode: string | null;
   state: string | null;
   course_norm: string | null;
   quota_norm: string | null;
   allotted_category_norm: string | null;
-  closing_rank: number | null;
-  allotment_count: number;
+  r1_closing_rank: number | null;
+  r1_allotment_count: number;
+  r2_closing_rank: number | null;
+  r2_allotment_count: number;
+  r3_closing_rank: number | null;
+  r3_allotment_count: number;
+  r3_group_id: string | null;
+  r4_closing_rank: number | null;
+  r4_allotment_count: number;
+  r4_group_id: string | null;
+  // Institute profile data (joined via mapping)
+  inst_fee_yr1: number | null;
+  inst_fee_yr2: number | null;
+  inst_fee_yr3: number | null;
+  inst_stipend_yr1: string | null;
+  inst_stipend_yr2: string | null;
+  inst_stipend_yr3: string | null;
+  inst_bond_forfeit: string | null;
+  inst_bond_years: string | null;
+  inst_beds: number | null;
+  inst_university: string | null;
+  inst_matched: boolean | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -58,16 +83,24 @@ export interface ClosingRankFilters {
   year?: number;
   counselling_type?: string;
   counselling_state?: string;
-  round?: number;
-  quota_norm?: string;
-  allotted_category_norm?: string;
-  state?: string;
-  course_norm?: string;
+  quota_norm?: string[];
+  allotted_category_norm?: string[];
+  state?: string[];
+  course_norm?: string[];
+  course_type?: string[];
   rank_min?: number;
   rank_max?: number;
   search?: string;
-  sort_by?: "institute_name" | "course_norm" | "closing_rank";
+  /** "r1"/"r2"/"r3"/"r4" の複数選択可 (OR条件); undefined = 全て表示 */
+  round_display?: ("r1" | "r2" | "r3" | "r4")[];
+  /** このランクが含まれるグループを表示 (closing_rank >= my_rank) */
+  my_rank?: number;
+  sort_by?: "quota_norm" | "allotted_category_norm" | "state" | "institute_name" | "institute_pincode" | "course_norm" | "r1_closing_rank" | "r2_closing_rank" | "r3_closing_rank" | "r4_closing_rank" | "inst_fee_yr1" | "inst_stipend_yr1" | "inst_bond_forfeit";
   sort_order?: "asc" | "desc";
+  fee_min?: number;
+  fee_max?: number;
+  bond_min?: number;
+  bond_max?: number;
   page?: number;
   page_size?: number;
 }
@@ -75,7 +108,15 @@ export interface ClosingRankFilters {
 function qs(params: Record<string, unknown>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    if (v === undefined || v === null || v === "") continue;
+    if (Array.isArray(v)) {
+      // Send each value as a separate param for FastAPI List[str] support
+      for (const item of v) {
+        if (item !== undefined && item !== null && item !== "") q.append(k, String(item));
+      }
+    } else {
+      q.set(k, String(v));
+    }
   }
   const s = q.toString();
   return s ? `?${s}` : "";
@@ -98,3 +139,47 @@ export const fetchClosingRanks = (f: ClosingRankFilters): Promise<PaginatedRespo
 
 export const fetchDrillDown = (groupId: string): Promise<DrillDownResponse> =>
   get(`/closing-ranks/${encodeURIComponent(groupId)}/allotments`);
+
+export const exportClosingRanksUrl = (f: ClosingRankFilters): string =>
+  `${API_URL}/closing-ranks/export${qs(f as Record<string, unknown>)}`;
+
+
+// ---------------------------------------------------------------------------
+// Institutes
+// ---------------------------------------------------------------------------
+
+export interface InstituteRow {
+  institute_code: number;
+  institute_name: string;
+  display_name: string;
+  address: string | null;
+  state: string | null;
+  pincode: string | null;
+  university: string | null;
+  fee_yr1: number | null;
+  fee_yr2: number | null;
+  fee_yr3: number | null;
+  annual_fee: string | null;
+  stipend_yr1: string | null;
+  stipend_yr2: string | null;
+  stipend_yr3: string | null;
+  hostel_male: string | null;
+  hostel_female: string | null;
+  bond_forfeit: string | null;
+  pwbd_friendly: string | null;
+  website: string | null;
+  match_status: string | null;
+}
+
+export interface InstituteFilters {
+  search?: string;
+  state?: string[];
+  match_status?: string[];
+  sort_by?: "display_name" | "state" | "pincode" | "annual_fee" | "stipend_yr1" | "institute_code";
+  sort_order?: "asc" | "desc";
+  page?: number;
+  page_size?: number;
+}
+
+export const fetchInstitutes = (f: InstituteFilters): Promise<PaginatedResponse<InstituteRow>> =>
+  get(`/institutes${qs(f as Record<string, unknown>)}`);

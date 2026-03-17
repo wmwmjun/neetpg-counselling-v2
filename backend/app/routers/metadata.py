@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, distinct, func
 
 from ..database import get_db
-from ..models import Allotment
+from ..models import Allotment, RefCourse
 from ..schemas import MetadataResponse
 
 router = APIRouter()
@@ -40,7 +40,7 @@ def get_metadata(
     def _distinct(col):
         return [
             v for (v,) in base.with_entities(col).distinct().order_by(col).all()
-            if v is not None
+            if v is not None and v != ""
         ]
 
     years = _distinct(Allotment.year)
@@ -52,6 +52,12 @@ def get_metadata(
     states = _distinct(Allotment.state)
     courses = _distinct(Allotment.course_norm)
 
+    # Course types from ref_courses table
+    course_types = [
+        v for (v,) in db.query(RefCourse.course_type).distinct().order_by(RefCourse.course_type).all()
+        if v is not None and v != ""
+    ]
+
     return MetadataResponse(
         years=sorted(set(years)),
         counselling_types=sorted(set(counselling_types)),
@@ -61,4 +67,5 @@ def get_metadata(
         categories=sorted(set(categories)),
         states=sorted(set(states)),
         courses=sorted(set(courses)),
+        course_types=sorted(set(course_types)),
     )
