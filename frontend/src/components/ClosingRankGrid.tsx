@@ -216,11 +216,18 @@ export default function ClosingRankGrid({
         <div style={{ fontSize: 18, marginBottom: 12 }}>⚠ Failed to load data</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>{error}</div>
         <div style={{ fontSize: 12, background: "#f8f8f8", border: "1px solid #ddd", borderRadius: 4, padding: 12, display: "inline-block", textAlign: "left", maxWidth: 560 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Start the backend:</div>
-          <code style={{ display: "block", marginBottom: 4 }}>cd backend</code>
-          <code style={{ display: "block", marginBottom: 4 }}>python -m scripts.init_db</code>
-          <code style={{ display: "block", marginBottom: 4 }}>python -m scripts.seed</code>
-          <code style={{ display: "block" }}>uvicorn app.main:app --reload</code>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>API URL: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000 (default)"}</div>
+          {typeof window !== "undefined" && window.location.hostname !== "localhost" ? (
+            <div>Ensure <code>NEXT_PUBLIC_API_URL</code> is set to your backend URL in Vercel environment variables and the backend is running.</div>
+          ) : (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Start the backend:</div>
+              <code style={{ display: "block", marginBottom: 4 }}>cd backend</code>
+              <code style={{ display: "block", marginBottom: 4 }}>python -m scripts.init_db</code>
+              <code style={{ display: "block", marginBottom: 4 }}>python -m scripts.seed</code>
+              <code style={{ display: "block" }}>uvicorn app.main:app --reload</code>
+            </>
+          )}
         </div>
       </div>
     );

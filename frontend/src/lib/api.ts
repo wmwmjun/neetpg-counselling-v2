@@ -123,7 +123,15 @@ function qs(params: Record<string, unknown>): string {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`);
+  const url = `${API_URL}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    throw new Error(
+      `Failed to fetch ${url} — is NEXT_PUBLIC_API_URL set correctly? (${err instanceof Error ? err.message : err})`
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`API ${res.status}: ${body || res.statusText}`);
