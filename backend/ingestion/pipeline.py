@@ -58,10 +58,16 @@ logger = logging.getLogger(__name__)
 LOG_EVERY = 100   # log progress every N rows
 
 
-def _fingerprint(sno, rank, quota_raw, institute_raw, course_raw, allotted_cat_raw) -> str:
-    """SHA-256 fingerprint for deduplication."""
+def _fingerprint(sno, rank, quota_raw, institute_raw, course_raw, allotted_cat_raw,
+                  year=None, round_num=None) -> str:
+    """SHA-256 fingerprint for deduplication.
+
+    year and round_num are included in the hash to prevent collisions
+    across different years/rounds (especially for RETAINED R2/R3 rows
+    where effective fields are all None).
+    """
     parts = "|".join(str(v or "") for v in [
-        sno, rank, quota_raw, institute_raw, course_raw, allotted_cat_raw
+        year, round_num, sno, rank, quota_raw, institute_raw, course_raw, allotted_cat_raw
     ])
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()[:40]
 
@@ -162,17 +168,15 @@ def run_ingestion(cfg: DatasetConfig, db: Session) -> dict:
                 rows_skipped += 1
                 continue
 
-            # Upsert via fingerprint uniqueness constraint
-            # NOTE: use source_row_fingerprint alone as the conflict target because
-            # the composite (year, counselling_type, counselling_state, round, fp)
-            # constraint fails to detect duplicates when counselling_state IS NULL
-            # (SQLite treats NULL != NULL in UNIQUE constraints).
+            # Upsert via fingerprint uniqueness.
+            # Use on_conflict_do_nothing() without index_elements so SQLite
+            # generates INSERT OR IGNORE, catching ALL constraint violations
+            # (the composite UNIQUE has NULL counselling_state which breaks
+            # explicit ON CONFLICT targeting in SQLite).
             stmt = (
                 dialect_insert(Allotment)
                 .values(**record)
-                .on_conflict_do_nothing(
-                    index_elements=["source_row_fingerprint"]
-                )
+                .on_conflict_do_nothing()
             )
             result = db.execute(stmt)
             if result.rowcount == 0:
@@ -271,7 +275,8 @@ def _process_row(
     course_norm = normalize_course(course_raw)
 
     # Fingerprint
-    fp = _fingerprint(sno, rank, quota_raw, institute_raw, course_raw, allotted_cat_raw)
+    fp = _fingerprint(sno, rank, quota_raw, institute_raw, course_raw, allotted_cat_raw,
+                      year=cfg.year, round_num=cfg.round)
 
     return {
         "year": cfg.year,
@@ -458,6 +463,8 @@ def _process_r2_row(
         eff_institute_raw,
         eff_course_raw,
         r2_remarks_raw,        # substitute for allotted_cat to keep uniqueness
+        year=cfg.year,
+        round_num=cfg.round,
     )
 
     return {
@@ -567,12 +574,7 @@ def run_round2_ingestion(cfg: "DatasetConfig", db: Session) -> dict:
             stmt = (
                 dialect_insert(Allotment)
                 .values(**record)
-                .on_conflict_do_nothing(
-                    index_elements=[
-                        "year", "counselling_type", "counselling_state",
-                        "round", "source_row_fingerprint",
-                    ]
-                )
+                .on_conflict_do_nothing()
             )
             result = db.execute(stmt)
             if result.rowcount == 0:
@@ -844,6 +846,7 @@ def _process_r3_row(
     # Fingerprint — use r3_remarks + rank for uniqueness
     fp = _fingerprint(
         None, rank, eff_quota_raw, eff_institute_raw, eff_course_raw, r3_remarks_raw,
+        year=cfg.year, round_num=cfg.round,
     )
 
     return {
@@ -953,9 +956,7 @@ def run_round3_ingestion(cfg: "DatasetConfig", db: Session) -> dict:
             stmt = (
                 dialect_insert(Allotment)
                 .values(**record)
-                .on_conflict_do_nothing(
-                    index_elements=["source_row_fingerprint"]
-                )
+                .on_conflict_do_nothing()
             )
             result = db.execute(stmt)
             if result.rowcount == 0:

@@ -42,9 +42,9 @@ class Allotment(Base):
     course_norm = Column(String(256), nullable=True)
 
     # Categories
-    allotted_category_raw = Column(String(64), nullable=True)
-    allotted_category_norm = Column(String(64), nullable=True)
-    candidate_category_raw = Column(String(64), nullable=True)   # modal only
+    allotted_category_raw = Column(String(256), nullable=True)
+    allotted_category_norm = Column(String(256), nullable=True)
+    candidate_category_raw = Column(String(256), nullable=True)   # modal only
 
     # Extras
     remarks = Column(Text, nullable=True)

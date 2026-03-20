@@ -75,7 +75,7 @@ TABLE_PK = {
     "ingestion_errors": "id",
 }
 
-BATCH_SIZE = 100
+BATCH_SIZE = int(os.getenv("MIGRATE_BATCH_SIZE", "50"))
 
 
 def migrate_table(table_name: str, resume: bool = False):
@@ -156,10 +156,10 @@ def migrate_table(table_name: str, resume: bool = False):
             print(f"    {min(i + BATCH_SIZE, total)}/{total}")
         except Exception as e:
             retries += 1
-            if retries > 4:
-                print(f"  FAILED after 4 retries at row {i}: {e}")
+            if retries > 8:
+                print(f"  FAILED after 8 retries at row {i}: {e}")
                 raise
-            wait = 2 ** retries
+            wait = min(2 ** retries, 30)
             print(f"    Error at row {i}, retrying in {wait}s... ({e})")
             time.sleep(wait)
             # Retry same batch

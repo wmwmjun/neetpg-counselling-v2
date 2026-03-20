@@ -446,39 +446,49 @@ def parse_round3_pdf(
         "intersection_tolerance": 3,
     }
 
+    import gc
+
+    # Get total page count with a quick open/close
     with pdfplumber.open(pdf_path) as pdf:
         total = len(pdf.pages)
-        effective_end = min(end_page or total, total)
+    effective_end = min(end_page or total, total)
 
-        logger.info(
-            "Round-3 PDF has %d pages. Processing pages %d–%d.",
-            total, start_page, effective_end,
-        )
+    logger.info(
+        "Round-3 PDF has %d pages. Processing pages %d–%d.",
+        total, start_page, effective_end,
+    )
 
-        for page_idx in range(start_page - 1, effective_end):
-            page_num = page_idx + 1
-            page = pdf.pages[page_idx]
+    # Process in batches to limit memory usage (pdfplumber holds all pages in memory)
+    BATCH_SIZE = 50
+    for batch_start_idx in range(start_page - 1, effective_end, BATCH_SIZE):
+        batch_end_idx = min(batch_start_idx + BATCH_SIZE, effective_end)
 
-            try:
-                tables = page.extract_tables(table_settings)
-            except Exception as exc:
-                logger.warning("Page %d: extract_tables failed: %s", page_num, exc)
-                tables = []
+        with pdfplumber.open(pdf_path, pages=list(range(batch_start_idx, batch_end_idx))) as pdf:
+            for local_idx, page in enumerate(pdf.pages):
+                page_num = batch_start_idx + local_idx + 1
 
-            if not tables:
-                logger.debug("Page %d: no tables found, skipping.", page_num)
-                continue
+                try:
+                    tables = page.extract_tables(table_settings)
+                except Exception as exc:
+                    logger.warning("Page %d: extract_tables failed: %s", page_num, exc)
+                    tables = []
 
-            for table in tables:
-                if not table:
+                if not tables:
+                    logger.debug("Page %d: no tables found, skipping.", page_num)
                     continue
-                merged = _merge_r3_rows(table)
-                for row in merged:
-                    if _is_r3_header_row(row):
+
+                for table in tables:
+                    if not table:
                         continue
-                    if not _is_rank(row[R3_COL_RANK]):
-                        continue
-                    yield page_num, row
+                    merged = _merge_r3_rows(table)
+                    for row in merged:
+                        if _is_r3_header_row(row):
+                            continue
+                        if not _is_rank(row[R3_COL_RANK]):
+                            continue
+                        yield page_num, row
+
+        gc.collect()
 
 
 def _fallback_text_parse(page) -> list[list[list[Optional[str]]]]:

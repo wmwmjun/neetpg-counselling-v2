@@ -63,6 +63,8 @@ _QUOTA_ALIAS: dict[str, str] = {
     "MUSLIM MINORITY": "MM",
     # AFMS (Armed Forces Medical Services)
     "AFMS": "AFMS",
+    "AF": "AFMS",
+    "A.F.": "AFMS",
     "A.F.M.S.": "AFMS",
     "ARMED FORCES": "AFMS",
     "ARMED FORCES MEDICAL SERVICES": "AFMS",
@@ -81,6 +83,9 @@ _QUOTA_ALIAS: dict[str, str] = {
     "MGT": "MNG",
     "PS": "MNG",
     "MANAGEMENT QUOTA": "MNG",
+    "MANAGEMENT/PAID SEATS QUOTA": "MNG",
+    "MANAGEMENT/PAID SEATS": "MNG",
+    "PAID SEATS QUOTA": "MNG",
     # NBE Diploma
     "NBE DIPLOMA": "NBE Diploma",
     "NBE-DIPLOMA": "NBE Diploma",
