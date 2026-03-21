@@ -167,7 +167,7 @@ export default function FilterModal({ open, filters, metadata, onApply, onClose 
   };
 
   const handleClear = () => {
-    setLocal({ year: 2025, counselling_type: "AIQ", fee_min: undefined, fee_max: undefined, bond_min: undefined, bond_max: undefined, course_type: undefined });
+    setLocal({ year: local.year, counselling_type: "AIQ", fee_min: undefined, fee_max: undefined, bond_min: undefined, bond_max: undefined, course_type: undefined });
   };
 
   if (!open) return null;

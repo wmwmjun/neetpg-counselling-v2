@@ -19,6 +19,7 @@ interface Props {
   onToggleFavorite: (row: ClosingRankRow) => void;
   showFavoritesOnly: boolean;
   favoriteRows?: ClosingRankRow[];
+  year?: number;
 }
 
 const CAT_CLASS: Record<string, string> = {
@@ -196,6 +197,7 @@ export default function ClosingRankGrid({
   data, loading, error, page, pageSize,
   sortBy, sortOrder, onPageChange, onGroupIdClick, onSort,
   favorites, onToggleFavorite, showFavoritesOnly, favoriteRows,
+  year = 2025,
 }: Props) {
   const [popupRow, setPopupRow] = useState<ClosingRankRow | null>(null);
 
@@ -328,16 +330,16 @@ export default function ClosingRankGrid({
               </SortTh>
               <th style={{ minWidth: 60, fontSize: 11 }}>Beds</th>
               <SortTh col="r1_closing_rank" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} style={{ minWidth: 100, color: "#2871b5" }}>
-                CR 2025 R1
+                {`CR ${year} R1`}
               </SortTh>
               <SortTh col="r2_closing_rank" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} style={{ minWidth: 100, color: "#e07b00" }}>
-                CR 2025 R2
+                {`CR ${year} R2`}
               </SortTh>
               <SortTh col="r3_closing_rank" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} style={{ minWidth: 100, color: "#2e7d32" }}>
-                CR 2025 R3
+                {`CR ${year} R3`}
               </SortTh>
               <SortTh col="r4_closing_rank" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} style={{ minWidth: 100, color: "#7b1fa2" }}>
-                CR 2025 R4
+                {`CR ${year} R4`}
               </SortTh>
             </tr>
           </thead>
@@ -427,7 +429,7 @@ export default function ClosingRankGrid({
                 <td style={{ textAlign: "center", fontSize: 12, color: row.inst_beds ? "#333" : "#ccc" }}>
                   {row.inst_beds ? row.inst_beds.toLocaleString() : "—"}
                 </td>
-                {/* CR 2025 R1 */}
+                {/* {`CR ${year} R1`} */}
                 <td style={{ textAlign: "center" }}>
                   {row.r1_group_id ? (
                     <button className="cr-link" onClick={() => onGroupIdClick(row.r1_group_id!)} style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "#2871b5" }}>
@@ -437,7 +439,7 @@ export default function ClosingRankGrid({
                     </button>
                   ) : <span style={{ color: "#bbb" }}>—</span>}
                 </td>
-                {/* CR 2025 R2 */}
+                {/* {`CR ${year} R2`} */}
                 <td style={{ textAlign: "center" }}>
                   {row.r2_group_id ? (
                     <button className="cr-link" onClick={() => onGroupIdClick(row.r2_group_id!)} style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "#e07b00" }}>
@@ -447,7 +449,7 @@ export default function ClosingRankGrid({
                     </button>
                   ) : <span style={{ color: "#bbb" }}>—</span>}
                 </td>
-                {/* CR 2025 R3 */}
+                {/* {`CR ${year} R3`} */}
                 <td style={{ textAlign: "center" }}>
                   {row.r3_group_id ? (
                     <button className="cr-link" onClick={() => onGroupIdClick(row.r3_group_id!)} style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "#2e7d32" }}>
@@ -457,7 +459,7 @@ export default function ClosingRankGrid({
                     </button>
                   ) : <span style={{ color: "#bbb" }}>—</span>}
                 </td>
-                {/* CR 2025 R4 */}
+                {/* {`CR ${year} R4`} */}
                 <td style={{ textAlign: "center" }}>
                   {row.r4_group_id ? (
                     <button className="cr-link" onClick={() => onGroupIdClick(row.r4_group_id!)} style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "#7b1fa2" }}>

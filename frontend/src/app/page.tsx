@@ -11,8 +11,9 @@ import {
 } from "@/lib/api";
 import { useFavorites } from "@/hooks/useFavorites";
 
+const DEFAULT_YEAR = 2025;
 const DEFAULT_FILTERS: ClosingRankFilters = {
-  year: 2025, counselling_type: "AIQ",
+  year: DEFAULT_YEAR, counselling_type: "AIQ",
   sort_by: "institute_name", sort_order: "asc",
 };
 const PAGE_SIZE = 50;
@@ -40,12 +41,14 @@ export default function HomePage() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  // Load metadata
+  const selectedYear = filters.year ?? DEFAULT_YEAR;
+
+  // Load metadata (re-fetch when year changes)
   useEffect(() => {
-    fetchMetadata({ year: 2025, counselling_type: "AIQ" })
+    fetchMetadata({ year: selectedYear, counselling_type: "AIQ" })
       .then(setMetadata)
       .catch(console.error);
-  }, []);
+  }, [selectedYear]);
 
   // Debounced grid fetch
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -198,12 +201,38 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Counselling type selector */}
+        {/* Counselling type selector + Year selector */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
           <select className="nv-select" style={{ fontWeight: 600, color: "#222" }} value="AIQ" onChange={() => {}}>
             <option value="AIQ">All India Counselling – PG Medical</option>
             <option value="STATE" disabled>State Counselling (coming soon)</option>
           </select>
+
+          {/* Year selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>Year</span>
+            <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: 4, overflow: "hidden" }}>
+              {(metadata?.years ?? [DEFAULT_YEAR]).sort((a, b) => b - a).map((y, i, arr) => {
+                const active = selectedYear === y;
+                return (
+                  <button
+                    key={y}
+                    onClick={() => { setFilters(prev => ({ ...prev, year: y })); setPage(1); }}
+                    style={{
+                      padding: "4px 12px", fontSize: 12, border: "none", cursor: "pointer",
+                      borderRight: i < arr.length - 1 ? "1px solid #ddd" : "none",
+                      background: active ? "#2871b5" : "#fff",
+                      color: active ? "#fff" : "#555",
+                      fontWeight: active ? 600 : 400,
+                    }}
+                  >
+                    {y}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <button className="btn-outline" style={{ fontSize: 12, color: "#2871b5" }}>
             Go to counselling ↗
           </button>
@@ -474,6 +503,7 @@ export default function HomePage() {
           onToggleFavorite={toggleFavorite}
           showFavoritesOnly={showFavoritesOnly}
           favoriteRows={showFavoritesOnly ? Array.from(favorites.values()) : undefined}
+          year={selectedYear}
         />
       </div>
 
@@ -492,6 +522,7 @@ export default function HomePage() {
         loading={modalLoading}
         error={modalError}
         onClose={closeModal}
+        year={selectedYear}
       />
     </div>
   );
