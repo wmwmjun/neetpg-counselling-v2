@@ -12,9 +12,10 @@ interface Props {
   loading: boolean;
   error: string | null;
   onClose: () => void;
+  year?: number;
 }
 
-export default function DrillDownModal({ groupId, data, loading, error, onClose }: Props) {
+export default function DrillDownModal({ groupId, data, loading, error, onClose, year = 2025 }: Props) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", h);
@@ -53,7 +54,7 @@ export default function DrillDownModal({ groupId, data, loading, error, onClose 
               <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
                 {data.allotment_count} record{data.allotment_count !== 1 ? "s" : ""} &nbsp;·&nbsp;
                 Closing Rank: <span style={{ color: "#2871b5", fontWeight: 700 }}>{data.closing_rank?.toLocaleString() ?? "—"}</span>
-                &nbsp;·&nbsp; R{rows[0]?.round ?? 1} – 2025
+                &nbsp;·&nbsp; R{rows[0]?.round ?? 1} – {year}
               </div>
             )}
           </div>

@@ -43,7 +43,11 @@ def get_metadata(
             if v is not None and v != ""
         ]
 
-    years = _distinct(Allotment.year)
+    # Years should always be unfiltered so the year selector shows all options
+    years = [
+        v for (v,) in db.query(Allotment.year).distinct().order_by(Allotment.year).all()
+        if v is not None
+    ]
     counselling_types = _distinct(Allotment.counselling_type)
     counselling_states = _distinct(Allotment.counselling_state)
     rounds = _distinct(Allotment.round)
