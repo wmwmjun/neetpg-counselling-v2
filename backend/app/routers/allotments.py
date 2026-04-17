@@ -10,8 +10,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import or_, func
 
 from ..database import get_db
 from ..models import Allotment
@@ -32,7 +32,7 @@ def _build_query(
     year: Optional[int],
     counselling_type: Optional[str],
     counselling_state: Optional[str],
-    round: Optional[int],
+    round_: Optional[int],
     quota_norm: Optional[str],
     allotted_category_norm: Optional[str],
     state: Optional[str],
@@ -56,8 +56,8 @@ def _build_query(
             q = q.filter(Allotment.counselling_state.is_(None))
         else:
             q = q.filter(Allotment.counselling_state == counselling_state)
-    if round is not None:
-        q = q.filter(Allotment.round == round)
+    if round_ is not None:
+        q = q.filter(Allotment.round == round_)
     if quota_norm:
         q = q.filter(Allotment.quota_norm == quota_norm)
     if allotted_category_norm:
@@ -83,32 +83,35 @@ def _build_query(
             )
         )
 
-    # Final-only: keep only the max-round confirmed-seat row per rank.
-    # "Confirmed seat" = seat_outcome IS NULL (R1 rows) or not LOST/NOT_ALLOTTED.
+    # Final-only: for each rank, keep only the row(s) whose round equals the
+    # highest round where the candidate still had a confirmed seat.
+    # Uses a correlated subquery to avoid self-join ambiguity.
     if final_only:
         valid_seat = or_(
             Allotment.seat_outcome.is_(None),
             Allotment.seat_outcome.notin_(_INVALID_OUTCOMES),
         )
-        max_round_subq = (
-            q.filter(valid_seat)
-            .with_entities(
-                Allotment.rank.label("f_rank"),
-                func.max(Allotment.round).label("f_max_round"),
+        # Alias to reference the same table inside the correlated subquery
+        a2 = aliased(Allotment, name="a2_final")
+        max_valid_round = (
+            db.query(func.max(a2.round))
+            .filter(
+                a2.rank == Allotment.rank,
+                a2.year == Allotment.year,
+                a2.counselling_type == Allotment.counselling_type,
+                or_(
+                    a2.seat_outcome.is_(None),
+                    a2.seat_outcome.notin_(_INVALID_OUTCOMES),
+                ),
             )
-            .group_by(Allotment.rank)
-            .subquery("max_rounds")
+            .correlate(Allotment)
+            .scalar_subquery()
         )
-        q = q.filter(valid_seat).join(
-            max_round_subq,
-            and_(
-                Allotment.rank == max_round_subq.c.f_rank,
-                Allotment.round == max_round_subq.c.f_max_round,
-            ),
-        )
+        q = q.filter(valid_seat, Allotment.round == max_valid_round)
 
-    # Sort: when sorting by rank, add round as secondary sort (always asc)
-    # so rows with the same rank appear in chronological round order.
+    # Sort: primary column, secondary always round ASC so same-rank rows
+    # appear in chronological order (R1 → R2 → R3 …).
+    # Tertiary by id for stable pagination.
     sort_col_map = {
         "rank": Allotment.rank,
         "institute_name": Allotment.institute_name,
@@ -117,9 +120,9 @@ def _build_query(
     }
     col = sort_col_map.get(sort_by, Allotment.rank)
     if sort_order == "desc":
-        q = q.order_by(col.desc().nullslast(), Allotment.round.asc())
+        q = q.order_by(col.desc().nullslast(), Allotment.round.asc(), Allotment.id.asc())
     else:
-        q = q.order_by(col.asc().nullsfirst(), Allotment.round.asc())
+        q = q.order_by(col.asc().nullsfirst(), Allotment.round.asc(), Allotment.id.asc())
 
     return q
 
