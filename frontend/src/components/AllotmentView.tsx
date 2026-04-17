@@ -40,6 +40,7 @@ export default function AllotmentView({ year, counsellingType }: Props) {
   const [rankMinText, setRankMinText] = useState("");
   const [rankMaxText, setRankMaxText] = useState("");
   const [selectedRound, setSelectedRound] = useState<number | undefined>(undefined);
+  const [finalOnly, setFinalOnly] = useState(false);
   const [sortBy, setSortBy] = useState<AllotmentFilters["sort_by"]>("rank");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -60,6 +61,7 @@ export default function AllotmentView({ year, counsellingType }: Props) {
           search: searchText || undefined,
           rank_min: rankMin && !isNaN(rankMin) ? rankMin : undefined,
           rank_max: rankMax && !isNaN(rankMax) ? rankMax : undefined,
+          final_only: finalOnly || undefined,
           sort_by: sortBy,
           sort_order: sortOrder,
           page,
@@ -73,7 +75,7 @@ export default function AllotmentView({ year, counsellingType }: Props) {
       }
     }, DEBOUNCE);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [year, counsellingType, selectedRound, searchText, rankMinText, rankMaxText, sortBy, sortOrder, page]);
+  }, [year, counsellingType, selectedRound, finalOnly, searchText, rankMinText, rankMaxText, sortBy, sortOrder, page]);
 
   // Reset page when filters change
   const setFilter = useCallback((fn: () => void) => {
@@ -100,7 +102,7 @@ export default function AllotmentView({ year, counsellingType }: Props) {
   const totalPages = data?.pages ?? 1;
   const total = data?.total ?? 0;
 
-  const hasFilters = !!(searchText || rankMinText || rankMaxText || selectedRound !== undefined);
+  const hasFilters = !!(searchText || rankMinText || rankMaxText || selectedRound !== undefined || finalOnly);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -179,6 +181,29 @@ export default function AllotmentView({ year, counsellingType }: Props) {
           />
         </div>
 
+        <div style={{ width: 1, height: 22, background: "#ddd" }} />
+
+        {/* Final Round Only toggle */}
+        <button
+          onClick={() => { setFinalOnly(v => !v); setSelectedRound(undefined); setPage(1); }}
+          title={
+            finalOnly
+              ? "全ラウンド表示に戻す"
+              : "各ランクの最終ラウンドのみ表示（LOST/NOT_ALLOTTED除外）"
+          }
+          style={{
+            padding: "4px 12px", fontSize: 12,
+            border: `1px solid ${finalOnly ? "#2e7d32" : "#ddd"}`,
+            borderRadius: 4, cursor: "pointer",
+            background: finalOnly ? "#e8f5e9" : "#fff",
+            color: finalOnly ? "#1b5e20" : "#555",
+            fontWeight: finalOnly ? 700 : 400,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {finalOnly ? "✓ Final Round Only" : "Final Round Only"}
+        </button>
+
         {/* Clear all filters */}
         {hasFilters && (
           <button
@@ -187,6 +212,7 @@ export default function AllotmentView({ year, counsellingType }: Props) {
               setRankMinText("");
               setRankMaxText("");
               setSelectedRound(undefined);
+              setFinalOnly(false);
               setPage(1);
             }}
             style={{
@@ -210,10 +236,11 @@ export default function AllotmentView({ year, counsellingType }: Props) {
       </div>
 
       {/* Info line */}
-      <div style={{ background: "#fffbf0", borderBottom: "1px solid #f0e6c0", padding: "5px 20px", fontSize: 11, color: "#7a6000" }}>
-        各ランカーが各ラウンドでどの大学・コースに配属されたかを表示します。
-        最終配属を確認するには最高ラウンド（R4等）でフィルタしてください。
-        R2以降は <strong>Outcome</strong> 列でシート状況（RETAINED / UPGRADED / LOST）を確認できます。
+      <div style={{ background: finalOnly ? "#f0fff4" : "#fffbf0", borderBottom: `1px solid ${finalOnly ? "#b2dfdb" : "#f0e6c0"}`, padding: "5px 20px", fontSize: 11, color: finalOnly ? "#1b5e20" : "#7a6000" }}>
+        {finalOnly
+          ? "各ランクの最終ラウンド配属先のみ表示しています（LOST / NOT_ALLOTTED は除外）。同じRankに複数の大学・コースが表示される場合、同ラウンドで複数allotmentがあることを示します。"
+          : "各ランカーが各ラウンドでどの大学・コースに配属されたかを表示します。同じRankの行はR1→R2→R3の順にソートされます。R2以降は Outcome 列でシート状況（RETAINED / UPGRADED / LOST）を確認できます。「Final Round Only」で最終配属先のみ絞り込めます。"
+        }
       </div>
 
       {/* Table */}

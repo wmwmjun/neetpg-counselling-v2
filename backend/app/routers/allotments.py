@@ -8,13 +8,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, and_, func
 
 from ..database import get_db
 from ..models import Allotment
 from ..schemas import AllotmentRow, AllotmentListResponse
 
 router = APIRouter()
+
+# seat_outcome values that mean the candidate does NOT have a confirmed seat
+_INVALID_OUTCOMES = ["LOST", "NOT_ALLOTTED"]
 
 
 @router.get("", response_model=AllotmentListResponse)
@@ -33,6 +36,10 @@ def get_allotments(
     rank_min: Optional[int] = Query(None),
     rank_max: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
+    # Final-round-only mode:
+    # When True, returns only the highest-round row per rank where the
+    # candidate still has a confirmed seat (seat_outcome != LOST/NOT_ALLOTTED).
+    final_only: bool = Query(False),
     # Sort
     sort_by: str = Query("rank", enum=["rank", "institute_name", "course_norm", "sno"]),
     sort_order: str = Query("asc", enum=["asc", "desc"]),
@@ -79,7 +86,34 @@ def get_allotments(
             )
         )
 
-    # Sort
+    # Final-only: keep only the max-round confirmed-seat row per rank.
+    # "Confirmed seat" = seat_outcome IS NULL (R1 rows) or not LOST/NOT_ALLOTTED.
+    if final_only:
+        valid_seat = or_(
+            Allotment.seat_outcome.is_(None),
+            Allotment.seat_outcome.notin_(_INVALID_OUTCOMES),
+        )
+        # Subquery: within the already-filtered set, find max round per rank
+        # where the seat was valid.
+        max_round_subq = (
+            q.filter(valid_seat)
+            .with_entities(
+                Allotment.rank.label("f_rank"),
+                func.max(Allotment.round).label("f_max_round"),
+            )
+            .group_by(Allotment.rank)
+            .subquery("max_rounds")
+        )
+        q = q.filter(valid_seat).join(
+            max_round_subq,
+            and_(
+                Allotment.rank == max_round_subq.c.f_rank,
+                Allotment.round == max_round_subq.c.f_max_round,
+            ),
+        )
+
+    # Sort: when sorting by rank, add round as secondary sort (always asc)
+    # so rows with the same rank appear in chronological round order.
     sort_col_map = {
         "rank": Allotment.rank,
         "institute_name": Allotment.institute_name,
@@ -88,9 +122,9 @@ def get_allotments(
     }
     col = sort_col_map.get(sort_by, Allotment.rank)
     if sort_order == "desc":
-        q = q.order_by(col.desc().nullslast())
+        q = q.order_by(col.desc().nullslast(), Allotment.round.asc())
     else:
-        q = q.order_by(col.asc().nullsfirst())
+        q = q.order_by(col.asc().nullsfirst(), Allotment.round.asc())
 
     total = q.count()
     pages = math.ceil(total / page_size) if page_size else 1

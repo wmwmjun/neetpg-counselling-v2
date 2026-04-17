@@ -233,6 +233,7 @@ export interface AllotmentFilters {
   rank_min?: number;
   rank_max?: number;
   search?: string;
+  final_only?: boolean;
   sort_by?: "rank" | "institute_name" | "course_norm" | "sno";
   sort_order?: "asc" | "desc";
   page?: number;
