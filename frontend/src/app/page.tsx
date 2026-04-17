@@ -4,6 +4,7 @@ import Link from "next/link";
 import ClosingRankGrid from "@/components/ClosingRankGrid";
 import DrillDownModal from "@/components/DrillDownModal";
 import FilterModal from "@/components/FilterModal";
+import AllotmentView from "@/components/AllotmentView";
 import {
   fetchMetadata, fetchClosingRanks, fetchDrillDown, exportClosingRanksUrl,
   type MetadataResponse, type ClosingRankFilters,
@@ -19,7 +20,10 @@ const DEFAULT_FILTERS: ClosingRankFilters = {
 const PAGE_SIZE = 50;
 const DEBOUNCE = 300;
 
+type ActiveTab = "closing_ranks" | "allotment";
+
 export default function HomePage() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>("closing_ranks");
   const [filters, setFilters] = useState<ClosingRankFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
 
@@ -186,12 +190,33 @@ export default function HomePage() {
       <div style={{ background: "#fff", borderBottom: "1px solid #ddd", padding: "10px 20px 0" }}>
         {/* Title row */}
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 6 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 20, fontWeight: 700, color: "#222" }}>Closing Ranks</span>
-            <Link href="/institutes" style={{ fontSize: 12, color: "#2871b5", textDecoration: "none", padding: "3px 10px", border: "1px solid #2871b5", borderRadius: 4 }}>Institute Profiles →</Link>
+          {/* Tab buttons */}
+          <div style={{ display: "flex", alignItems: "center", gap: 0, border: "1px solid #ddd", borderRadius: 6, overflow: "hidden" }}>
+            <button
+              onClick={() => setActiveTab("closing_ranks")}
+              style={{
+                padding: "6px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer",
+                background: activeTab === "closing_ranks" ? "#2871b5" : "#fff",
+                color: activeTab === "closing_ranks" ? "#fff" : "#555",
+                borderRight: "1px solid #ddd",
+              }}
+            >
+              Closing Ranks
+            </button>
+            <button
+              onClick={() => setActiveTab("allotment")}
+              style={{
+                padding: "6px 16px", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer",
+                background: activeTab === "allotment" ? "#2871b5" : "#fff",
+                color: activeTab === "allotment" ? "#fff" : "#555",
+              }}
+            >
+              Allotment
+            </button>
           </div>
+          <Link href="/institutes" style={{ fontSize: 12, color: "#2871b5", textDecoration: "none", padding: "3px 10px", border: "1px solid #2871b5", borderRadius: 4 }}>Institute Profiles →</Link>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-            {gridData && (
+            {activeTab === "closing_ranks" && gridData && (
               <span style={{ fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>
                 {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, gridData.total).toLocaleString()} of{" "}
                 <strong>{gridData.total.toLocaleString()}</strong> Records
@@ -238,15 +263,17 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Info line */}
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>
-          * Click on Ranks to view the allotment list. &nbsp;|&nbsp;
-          Click on the record for detailed information. &nbsp;|&nbsp;
-          * indicates additional remarks.
-        </div>
+        {/* Info line — Closing Ranks only */}
+        {activeTab === "closing_ranks" && (
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>
+            * Click on Ranks to view the allotment list. &nbsp;|&nbsp;
+            Click on the record for detailed information. &nbsp;|&nbsp;
+            * indicates additional remarks.
+          </div>
+        )}
 
-        {/* ── Quick filter bar ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 10 }}>
+        {/* ── Quick filter bar — Closing Ranks only ── */}
+        {activeTab === "closing_ranks" && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 10 }}>
 
           {/* Round multi-select toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -452,10 +479,10 @@ export default function HomePage() {
           >
             ☰ Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
           </button>
-        </div>
+        </div>}
 
-        {/* Active filter chips — shown for any selected values */}
-        {(
+        {/* Active filter chips — Closing Ranks only */}
+        {activeTab === "closing_ranks" && (
           (filters.quota_norm ?? []).length >= 1 ||
           (filters.allotted_category_norm ?? []).length >= 1 ||
           (filters.state ?? []).length >= 1 ||
@@ -488,23 +515,30 @@ export default function HomePage() {
 
       {/* ── Main table area ── */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <ClosingRankGrid
-          data={gridData}
-          loading={gridLoading}
-          error={gridError}
-          page={page}
-          pageSize={PAGE_SIZE}
-          sortBy={filters.sort_by}
-          sortOrder={filters.sort_order}
-          onPageChange={setPage}
-          onGroupIdClick={handleGroupIdClick}
-          onSort={handleSort}
-          favorites={favorites}
-          onToggleFavorite={toggleFavorite}
-          showFavoritesOnly={showFavoritesOnly}
-          favoriteRows={showFavoritesOnly ? Array.from(favorites.values()) : undefined}
-          year={selectedYear}
-        />
+        {activeTab === "closing_ranks" ? (
+          <ClosingRankGrid
+            data={gridData}
+            loading={gridLoading}
+            error={gridError}
+            page={page}
+            pageSize={PAGE_SIZE}
+            sortBy={filters.sort_by}
+            sortOrder={filters.sort_order}
+            onPageChange={setPage}
+            onGroupIdClick={handleGroupIdClick}
+            onSort={handleSort}
+            favorites={favorites}
+            onToggleFavorite={toggleFavorite}
+            showFavoritesOnly={showFavoritesOnly}
+            favoriteRows={showFavoritesOnly ? Array.from(favorites.values()) : undefined}
+            year={selectedYear}
+          />
+        ) : (
+          <AllotmentView
+            year={selectedYear}
+            counsellingType={filters.counselling_type ?? "AIQ"}
+          />
+        )}
       </div>
 
       {/* Modals */}

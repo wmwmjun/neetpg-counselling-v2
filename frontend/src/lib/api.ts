@@ -191,3 +191,53 @@ export interface InstituteFilters {
 
 export const fetchInstitutes = (f: InstituteFilters): Promise<PaginatedResponse<InstituteRow>> =>
   get(`/institutes${qs(f as Record<string, unknown>)}`);
+
+
+// ---------------------------------------------------------------------------
+// Allotments (individual rank-wise records)
+// ---------------------------------------------------------------------------
+
+export interface AllotmentRow {
+  id: number;
+  year: number;
+  counselling_type: string;
+  counselling_state: string | null;
+  round: number;
+  sno: number | null;
+  rank: number | null;
+  quota_raw: string | null;
+  quota_norm: string | null;
+  institute_raw: string | null;
+  institute_name: string | null;
+  state: string | null;
+  course_raw: string | null;
+  course_norm: string | null;
+  allotted_category_raw: string | null;
+  allotted_category_norm: string | null;
+  candidate_category_raw: string | null;
+  remarks: string | null;
+  source_page: number | null;
+  r1_status: string | null;
+  seat_outcome: string | null;
+}
+
+export interface AllotmentFilters {
+  year?: number;
+  counselling_type?: string;
+  round?: number;
+  quota_norm?: string;
+  allotted_category_norm?: string;
+  state?: string;
+  course_norm?: string;
+  institute_name?: string;
+  rank_min?: number;
+  rank_max?: number;
+  search?: string;
+  sort_by?: "rank" | "institute_name" | "course_norm" | "sno";
+  sort_order?: "asc" | "desc";
+  page?: number;
+  page_size?: number;
+}
+
+export const fetchAllotments = (f: AllotmentFilters): Promise<PaginatedResponse<AllotmentRow>> =>
+  get(`/allotments${qs(f as Record<string, unknown>)}`);
