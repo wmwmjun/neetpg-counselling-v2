@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   fetchAllotments,
+  exportAllotmentsUrl,
   type AllotmentRow,
   type AllotmentFilters,
   type PaginatedResponse,
@@ -76,6 +77,33 @@ export default function AllotmentView({ year, counsellingType }: Props) {
     }, DEBOUNCE);
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [year, counsellingType, selectedRound, finalOnly, searchText, rankMinText, rankMaxText, sortBy, sortOrder, page]);
+
+  // Build current filters (shared between API fetch and CSV export URL)
+  const currentFilters = useCallback((): AllotmentFilters => {
+    const rankMin = rankMinText ? parseInt(rankMinText, 10) : undefined;
+    const rankMax = rankMaxText ? parseInt(rankMaxText, 10) : undefined;
+    return {
+      year,
+      counselling_type: counsellingType,
+      round: selectedRound,
+      search: searchText || undefined,
+      rank_min: rankMin && !isNaN(rankMin) ? rankMin : undefined,
+      rank_max: rankMax && !isNaN(rankMax) ? rankMax : undefined,
+      final_only: finalOnly || undefined,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    };
+  }, [year, counsellingType, selectedRound, searchText, rankMinText, rankMaxText, finalOnly, sortBy, sortOrder]);
+
+  const handleExportCsv = useCallback(() => {
+    const url = exportAllotmentsUrl(currentFilters());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [currentFilters]);
 
   // Reset page when filters change
   const setFilter = useCallback((fn: () => void) => {
@@ -225,6 +253,19 @@ export default function AllotmentView({ year, counsellingType }: Props) {
 
         <div style={{ flex: 1 }} />
 
+        {/* CSV download */}
+        <button
+          onClick={handleExportCsv}
+          title="Download filtered results as CSV"
+          style={{
+            padding: "4px 12px", fontSize: 12, border: "1px solid #4caf50",
+            borderRadius: 4, cursor: "pointer", background: "#f1faf1",
+            color: "#2e7d32", fontWeight: 600, whiteSpace: "nowrap",
+          }}
+        >
+          ⬇ CSV
+        </button>
+
         {/* Record count */}
         {data && !loading && (
           <span style={{ fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>
@@ -269,6 +310,7 @@ export default function AllotmentView({ year, counsellingType }: Props) {
                 <Th onClick={() => handleSort("institute_name")} style={{ minWidth: 200 }}>
                   Institute <SortIcon col="institute_name" />
                 </Th>
+                <Th style={{ minWidth: 140 }}>City / Pincode</Th>
                 <Th onClick={() => handleSort("course_norm")} style={{ minWidth: 160 }}>
                   Course <SortIcon col="course_norm" />
                 </Th>
@@ -310,6 +352,17 @@ export default function AllotmentView({ year, counsellingType }: Props) {
                       >
                         {row.institute_name ?? row.institute_raw ?? "–"}
                       </span>
+                    </td>
+
+                    {/* Address (city + pincode) */}
+                    <td style={{ ...tdBase, maxWidth: 160 }}>
+                      {row.institute_city || row.institute_pincode ? (
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", color: "#555", fontSize: 11 }}>
+                          {[row.institute_city, row.institute_pincode].filter(Boolean).join(" ")}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#ccc", fontSize: 11 }}>–</span>
+                      )}
                     </td>
 
                     {/* Course */}

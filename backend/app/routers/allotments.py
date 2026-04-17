@@ -1,12 +1,15 @@
 """
-GET /allotments
-Returns raw allotment records with full server-side filtering and pagination.
+GET /allotments        — paginated individual allotment records
+GET /allotments/export — streaming CSV download (no row limit)
 """
 from __future__ import annotations
+import csv
+import io
 import math
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 
@@ -20,33 +23,27 @@ router = APIRouter()
 _INVALID_OUTCOMES = ["LOST", "NOT_ALLOTTED"]
 
 
-@router.get("", response_model=AllotmentListResponse)
-def get_allotments(
-    # Dataset dimensions
-    year: Optional[int] = Query(None),
-    counselling_type: Optional[str] = Query(None),
-    counselling_state: Optional[str] = Query(None),
-    round: Optional[int] = Query(None),
-    # Filters
-    quota_norm: Optional[str] = Query(None),
-    allotted_category_norm: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    course_norm: Optional[str] = Query(None),
-    institute_name: Optional[str] = Query(None),
-    rank_min: Optional[int] = Query(None),
-    rank_max: Optional[int] = Query(None),
-    search: Optional[str] = Query(None),
-    # Final-round-only mode:
-    # When True, returns only the highest-round row per rank where the
-    # candidate still has a confirmed seat (seat_outcome != LOST/NOT_ALLOTTED).
-    final_only: bool = Query(False),
-    # Sort
-    sort_by: str = Query("rank", enum=["rank", "institute_name", "course_norm", "sno"]),
-    sort_order: str = Query("asc", enum=["asc", "desc"]),
-    # Pagination
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
-    db: Session = Depends(get_db),
+# ---------------------------------------------------------------------------
+# Shared query builder
+# ---------------------------------------------------------------------------
+
+def _build_query(
+    db: Session,
+    year: Optional[int],
+    counselling_type: Optional[str],
+    counselling_state: Optional[str],
+    round: Optional[int],
+    quota_norm: Optional[str],
+    allotted_category_norm: Optional[str],
+    state: Optional[str],
+    course_norm: Optional[str],
+    institute_name: Optional[str],
+    rank_min: Optional[int],
+    rank_max: Optional[int],
+    search: Optional[str],
+    final_only: bool,
+    sort_by: str,
+    sort_order: str,
 ):
     q = db.query(Allotment)
 
@@ -93,8 +90,6 @@ def get_allotments(
             Allotment.seat_outcome.is_(None),
             Allotment.seat_outcome.notin_(_INVALID_OUTCOMES),
         )
-        # Subquery: within the already-filtered set, find max round per rank
-        # where the seat was valid.
         max_round_subq = (
             q.filter(valid_seat)
             .with_entities(
@@ -125,6 +120,110 @@ def get_allotments(
         q = q.order_by(col.desc().nullslast(), Allotment.round.asc())
     else:
         q = q.order_by(col.asc().nullsfirst(), Allotment.round.asc())
+
+    return q
+
+
+# ---------------------------------------------------------------------------
+# GET /allotments/export  — streaming CSV download
+# ---------------------------------------------------------------------------
+
+@router.get("/export")
+def export_allotments_csv(
+    year: Optional[int] = Query(None),
+    counselling_type: Optional[str] = Query(None),
+    counselling_state: Optional[str] = Query(None),
+    round: Optional[int] = Query(None),
+    quota_norm: Optional[str] = Query(None),
+    allotted_category_norm: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    course_norm: Optional[str] = Query(None),
+    institute_name: Optional[str] = Query(None),
+    rank_min: Optional[int] = Query(None),
+    rank_max: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    final_only: bool = Query(False),
+    sort_by: str = Query("rank", enum=["rank", "institute_name", "course_norm", "sno"]),
+    sort_order: str = Query("asc", enum=["asc", "desc"]),
+    db: Session = Depends(get_db),
+):
+    """Export current filtered allotments as CSV (no row limit)."""
+    q = _build_query(
+        db, year, counselling_type, counselling_state, round,
+        quota_norm, allotted_category_norm, state, course_norm, institute_name,
+        rank_min, rank_max, search, final_only, sort_by, sort_order,
+    )
+    rows = q.all()
+
+    def generate():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            "Rank", "Round", "Institute", "City", "Pincode", "State",
+            "Course", "Quota", "Category", "Outcome",
+            "Year", "Counselling Type",
+        ])
+        yield buf.getvalue()
+
+        for r in rows:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow([
+                r.rank if r.rank is not None else "",
+                r.round,
+                r.institute_name or "",
+                r.institute_city or "",
+                r.institute_pincode or "",
+                r.state or "",
+                r.course_norm or r.course_raw or "",
+                r.quota_norm or "",
+                r.allotted_category_norm or "",
+                r.seat_outcome or "",
+                r.year,
+                r.counselling_type,
+            ])
+            yield buf.getvalue()
+
+    ct = counselling_type or "AIQ"
+    yr = year or "all"
+    filename = f"neetpg_allotments_{ct}_{yr}.csv"
+    return StreamingResponse(
+        generate(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /allotments
+# ---------------------------------------------------------------------------
+
+@router.get("", response_model=AllotmentListResponse)
+def get_allotments(
+    year: Optional[int] = Query(None),
+    counselling_type: Optional[str] = Query(None),
+    counselling_state: Optional[str] = Query(None),
+    round: Optional[int] = Query(None),
+    quota_norm: Optional[str] = Query(None),
+    allotted_category_norm: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    course_norm: Optional[str] = Query(None),
+    institute_name: Optional[str] = Query(None),
+    rank_min: Optional[int] = Query(None),
+    rank_max: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    final_only: bool = Query(False),
+    sort_by: str = Query("rank", enum=["rank", "institute_name", "course_norm", "sno"]),
+    sort_order: str = Query("asc", enum=["asc", "desc"]),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    q = _build_query(
+        db, year, counselling_type, counselling_state, round,
+        quota_norm, allotted_category_norm, state, course_norm, institute_name,
+        rank_min, rank_max, search, final_only, sort_by, sort_order,
+    )
 
     total = q.count()
     pages = math.ceil(total / page_size) if page_size else 1

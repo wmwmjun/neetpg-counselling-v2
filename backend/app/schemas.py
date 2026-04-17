@@ -89,6 +89,8 @@ class AllotmentRow(BaseModel):
     quota_norm: Optional[str]
     institute_raw: Optional[str]
     institute_name: Optional[str]
+    institute_city: Optional[str] = None
+    institute_pincode: Optional[str] = None
     state: Optional[str]
     course_raw: Optional[str]
     course_norm: Optional[str]
