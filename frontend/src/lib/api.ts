@@ -209,6 +209,8 @@ export interface AllotmentRow {
   quota_norm: string | null;
   institute_raw: string | null;
   institute_name: string | null;
+  institute_city: string | null;
+  institute_pincode: string | null;
   state: string | null;
   course_raw: string | null;
   course_norm: string | null;
@@ -233,6 +235,7 @@ export interface AllotmentFilters {
   rank_min?: number;
   rank_max?: number;
   search?: string;
+  final_only?: boolean;
   sort_by?: "rank" | "institute_name" | "course_norm" | "sno";
   sort_order?: "asc" | "desc";
   page?: number;
@@ -241,3 +244,6 @@ export interface AllotmentFilters {
 
 export const fetchAllotments = (f: AllotmentFilters): Promise<PaginatedResponse<AllotmentRow>> =>
   get(`/allotments${qs(f as Record<string, unknown>)}`);
+
+export const exportAllotmentsUrl = (f: AllotmentFilters): string =>
+  `${API_URL}/allotments/export${qs(f as Record<string, unknown>)}`;
